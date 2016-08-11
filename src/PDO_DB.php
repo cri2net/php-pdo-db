@@ -90,6 +90,8 @@ class PDO_DB
             $str = self::arrayToString($data);
             $stm = $pdo->prepare("UPDATE `$table` SET $str WHERE `$idColumnName`=? LIMIT 1");
             $stm->execute(array($id));
+
+            return $stm->rowCount();
         }
     }
     
@@ -104,7 +106,9 @@ class PDO_DB
         if (!empty($data)) {
             $pdo = self::getPDO();
             $str = self::arrayToString($data);
-            $pdo->query("UPDATE `$table` SET $str WHERE $where");
+            $stm = $pdo->query("UPDATE `$table` SET $str WHERE $where");
+
+            return $stm->rowCount();
         }
     }
     
@@ -209,6 +213,7 @@ class PDO_DB
         
         $stm = $pdo->prepare($query);
         $stm->execute(array($id));
+        return $stm->rowCount();
     }
 
     public static function rebuild_pos($table, $where = null, $order = null)
