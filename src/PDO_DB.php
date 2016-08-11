@@ -131,10 +131,17 @@ class PDO_DB
     {
         $pdo = self::getPDO();
         $str = '';
-        foreach ($data as $key=>$value) {
-            $value = $pdo->quote($value);
-            $str .= "`$key` = $value, ";
+
+        foreach ($data as $key => $value) {
+
+            if ($value === null) {
+                $str .= "`$key` = NULL, ";
+            } else {
+                $value = $pdo->quote($value);
+                $str .= "`$key` = $value, ";
+            }
         }
+
         return trim($str, ', ');
     }
 
