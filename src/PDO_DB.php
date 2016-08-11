@@ -146,7 +146,7 @@ class PDO_DB
         $instance = self::getInstance();
         $args = func_get_args();
 
-        // LIMIT стоит 4-м аргументов, перед ним два необязательных. Если он не указан, ставим ему '1'
+        // LIMIT стоит 4-м аргументом, перед ним два необязательных. Если он не указан, ставим ему '1'
         if (!isset($args[1])) {
             $args[1] = null;
         }
@@ -216,22 +216,22 @@ class PDO_DB
         return $stm->rowCount();
     }
 
-    public static function rebuild_pos($table, $where = null, $order = null)
+    public static function rebuild_pos($table, $where = null, $order = null, $column = 'pos')
     {
         $pdo = self::getPDO();
-        $qOrder = ($order == null) ? 'pos ASC, id ASC' : $order;
+        $qOrder = ($order == null) ? "`$column` ASC, id ASC" : $order;
         $qWhere = ($where == null) ? '' : "WHERE $where";
 
         $stm = $pdo->query("SELECT * FROM $table $qWhere ORDER BY $qOrder");
         $arr = $stm->fetchAll();
 
-        $stm = $pdo->prepare("UPDATE $table SET `pos`=? WHERE `id`=? LIMIT 1");
+        $stm = $pdo->prepare("UPDATE $table SET `$column`=? WHERE `id`=? LIMIT 1");
         for ($i=0; $i < count($arr); $i++) {
             $stm->execute(array($i+1, $arr[$i]['id']));
         }
     }
     
-    public static function change_pos_from_to($table, $where, $posFrom, $posTo, $order = null, $column = 'pos')
+    public static function change_pos_from_to($table, $where, $posFrom, $posTo, $column = 'pos')
     {
         $pdo = self::getPDO();
         $posFrom = (int)$posFrom;
@@ -261,7 +261,7 @@ class PDO_DB
         return true;
     }
 
-    public static function change_pos($table, $where, $id, $dir, $order = null)
+    public static function change_pos($table, $where, $id, $dir, $order = null, $column = 'pos', $primary = 'id')
     {
         $pdo = self::getPDO();
 
@@ -271,25 +271,25 @@ class PDO_DB
         
         switch ($dir) {
             case 'dup':
-                $pdo->query("UPDATE `$table` SET `pos`=0 WHERE `id`='$id'");
+                $pdo->query("UPDATE `$table` SET `$column`=0 WHERE `$primary`='$id'");
                 break;
 
             case 'ddown':
                 $pos = self::max_pos("$table", $where) + 1;
-                $pdo->query("UPDATE `$table` SET `pos`='$pos' WHERE `id`='$id'");
+                $pdo->query("UPDATE `$table` SET `$column`='$pos' WHERE `$primary`='$id'");
                 break;
 
             case 'up':
                 $item1 = self::row_by_id("$table", $id);
                 $pos1 = $item1['pos'];
                 $pos2 = $pos1 - 1;
-                $stm = $pdo->query("SELECT * FROM `$table` WHERE `pos`='$pos2' $qWhere LIMIT 1");
+                $stm = $pdo->query("SELECT * FROM `$table` WHERE `$column`='$pos2' $qWhere LIMIT 1");
 
                 $item2 = $stm->fetch();
                 
                 if ($item2 !== false) {
-                    $pdo->query("UPDATE $table SET `pos`='$pos2' WHERE `id`='{$item1['id']}' LIMIT 1");
-                    $pdo->query("UPDATE $table SET `pos`='$pos1' WHERE `id`='{$item2['id']}' LIMIT 1");
+                    $pdo->query("UPDATE $table SET `$column`='$pos2' WHERE `$primary`='{$item1['id']}' LIMIT 1");
+                    $pdo->query("UPDATE $table SET `$column`='$pos1' WHERE `$primary`='{$item2['id']}' LIMIT 1");
                 }
                 break;
             
@@ -299,12 +299,12 @@ class PDO_DB
                 $pos1 = $item1['pos'];
                 $pos2 = $pos1 + 1;
 
-                $stm = $pdo->query("SELECT * FROM `$table` WHERE `pos`='$pos2' $qWhere LIMIT 1");
+                $stm = $pdo->query("SELECT * FROM `$table` WHERE `$column`='$pos2' $qWhere LIMIT 1");
                 $item2 = $stm->fetch();
                 
                 if ($item2 !== false) {
-                    $pdo->query("UPDATE $table SET `pos`='$pos2' WHERE `id`='{$item1['id']}' LIMIT 1");
-                    $pdo->query("UPDATE $table SET `pos`='$pos1' WHERE `id`='{$item2['id']}' LIMIT 1");
+                    $pdo->query("UPDATE $table SET `$column`='$pos2' WHERE `$primary`='{$item1['id']}' LIMIT 1");
+                    $pdo->query("UPDATE $table SET `$column`='$pos1' WHERE `$primary`='{$item2['id']}' LIMIT 1");
                 }
                 break;
         }
