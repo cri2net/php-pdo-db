@@ -1,0 +1,23 @@
+{
+    "name": "cri2net/php-pdo-db",
+    "type": "library",
+    "description": "PHP Class to work with the database using PDO",
+    "authors": [
+        {
+            "name": "Andrey Davidovich",
+            "email": "cri2net@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.4.0",
+        "cri2net/php-singleton": "~1.0"
+    },
+    "require-dev": {
+    },
+    "autoload": {
+        "psr-4": {
+            "cri2net\\php_pdo_db\\": "src"
+        }
+    },
+    "license": "proprietary"
+}
