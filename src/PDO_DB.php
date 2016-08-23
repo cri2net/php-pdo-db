@@ -38,7 +38,7 @@ class PDO_DB
             }
 
             self::$pdo = new \PDO(
-                "{$defaults['type']}:host={$defaults['host']};dbname={$defaults['name']};charset=utf8",
+                "{$defaults['type']}:host={$defaults['host']};dbname={$defaults['name']};charset={$defaults['charset']}",
                 $defaults['user'],
                 $defaults['password'],
                 [
@@ -78,15 +78,15 @@ class PDO_DB
     /**
      * Preform SQL update operation. 
      * @param array $data - associated array of data, key name should be as field name in the DB table.
-     * @param string $table - name of the table, where data should be inserted.
-     * @param string $idColumnName - name of the column for where clause.
-     * @param string $id - value of the idColumnName for where clause.
+     * @param string $table - name of the table, where record should be updated.
+     * @param string $primary - name of the column for where clause.
+     * @param string $id - value of the primary for where clause.
      */
-    public static function update(array $data, $table, $id, $idColumnName = 'id')
+    public static function update(array $data, $table, $id, $primary = 'id')
     {
         if (!empty($data)) {
             $str = self::arrayToString($data);
-            $stm = self::prepare("UPDATE `$table` SET $str WHERE `$idColumnName`=? LIMIT 1", [$id]);
+            $stm = self::prepare("UPDATE `$table` SET $str WHERE `$primary`=? LIMIT 1", [$id]);
 
             return $stm->rowCount();
         }
@@ -95,7 +95,7 @@ class PDO_DB
     /**
      * Preform SQL update operation. 
      * @param array $data - associated array of data, key name should be as field name in the DB table.
-     * @param string $table - name of the table, where data should be inserted.
+     * @param string $table - name of the table, where records should be updated.
      * @param string $where - SQL where clause.
      */
     public static function updateWithWhere(array $data, $table, $where)
@@ -184,9 +184,9 @@ class PDO_DB
         return $stm->fetchAll();
     }
     
-    public static function row_by_id($table, $id, $idColumnName = 'id')
+    public static function row_by_id($table, $id, $primary = 'id')
     {
-        $stm = self::prepare("SELECT * FROM `$table` WHERE `$idColumnName`=? LIMIT 1", [$id]);
+        $stm = self::prepare("SELECT * FROM `$table` WHERE `$primary`=? LIMIT 1", [$id]);
         $record = $stm->fetch();
         
         if ($record === false) {
@@ -214,11 +214,11 @@ class PDO_DB
         return $pdo->query($query);
     }
 
-    public static function del_id($table, $id, $is_virtual = false, $del_column = 'is_del', $idColumnName = 'id')
+    public static function del_id($table, $id, $is_virtual = false, $del_column = 'is_del', $primary = 'id')
     {
         $query = $is_virtual
-            ? "UPDATE $table SET `$del_column`=1 WHERE `$idColumnName`=? LIMIT 1"
-            : "DELETE FROM $table WHERE `$idColumnName`=? LIMIT 1";
+            ? "UPDATE $table SET `$del_column`=1 WHERE `$primary`=? LIMIT 1"
+            : "DELETE FROM $table WHERE `$primary`=? LIMIT 1";
         
         $stm = self::prepare($query, [$id]);
         return $stm->rowCount();
@@ -238,7 +238,7 @@ class PDO_DB
         }
     }
     
-    public static function change_pos_from_to($table, $where, $posFrom, $posTo, $column = 'pos')
+    public static function change_pos_from_to($table, $where, $posFrom, $posTo, $column = 'pos', $primary = 'id')
     {
         $posFrom = (int)$posFrom;
         $posTo = (int)$posTo;
@@ -246,16 +246,14 @@ class PDO_DB
             return false;
         }
 
-        $qW = ($where == null)? '' : "$where AND";
+        $qW = ($where == null) ? '' : "$where AND";
         
-        $stm = self::query("SELECT id FROM $table WHERE $qW `$column`=$posFrom LIMIT 1");
-        $row = $stm->fetch();
+        $stm = self::query("SELECT `$primary` FROM $table WHERE $qW `$column`=$posFrom LIMIT 1");
+        $id = $stm->fetchColumn();
         
-        if ($row === false) {
+        if ($id === false) {
             return false;
         }
-        
-        $id = $row['id'];
         
         if ($posFrom > $posTo) {
             self::query("UPDATE $table SET `$column` = `$column` + 1 WHERE $qW `$column` >= $posTo AND `$column` < $posFrom");
@@ -263,24 +261,23 @@ class PDO_DB
             self::query("UPDATE $table SET `$column` = `$column` - 1 WHERE $qW `$column` > $posFrom AND `$column` <= $posTo");
         }
             
-        self::query("UPDATE $table SET `$column`=$posTo WHERE id=$id LIMIT 1");
+        self::prepare("UPDATE $table SET `$column`=$posTo WHERE `$primary`=? LIMIT 1", [$id]);
         return true;
     }
 
     public static function change_pos($table, $where, $id, $dir, $order = null, $column = 'pos', $primary = 'id')
     {
-        $id = (int)$id;
         self::rebuild_pos($table, $where, $order);
         $qWhere = ($where == null) ? '' : "AND $where";
         
         switch ($dir) {
             case 'dup':
-                self::query("UPDATE `$table` SET `$column`=0 WHERE `$primary`='$id'");
+                self::prepare("UPDATE `$table` SET `$column`=0 WHERE `$primary`=?", [$id]);
                 break;
 
             case 'ddown':
                 $pos = self::max_pos("$table", $where) + 1;
-                self::query("UPDATE `$table` SET `$column`='$pos' WHERE `$primary`='$id'");
+                self::prepare("UPDATE `$table` SET `$column`='$pos' WHERE `$primary`=?", [$id]);
                 break;
 
             case 'up':
@@ -292,8 +289,8 @@ class PDO_DB
                 $item2 = $stm->fetch();
                 
                 if ($item2 !== false) {
-                    self::query("UPDATE $table SET `$column`='$pos2' WHERE `$primary`='{$item1['id']}' LIMIT 1");
-                    self::query("UPDATE $table SET `$column`='$pos1' WHERE `$primary`='{$item2['id']}' LIMIT 1");
+                    self::prepare("UPDATE $table SET `$column`=? WHERE `$primary`=? LIMIT 1", [$pos2, $item1[$primary]]);
+                    self::prepare("UPDATE $table SET `$column`=? WHERE `$primary`=? LIMIT 1", [$pos1, $item2[$primary]]);
                 }
                 break;
             
@@ -307,8 +304,8 @@ class PDO_DB
                 $item2 = $stm->fetch();
                 
                 if ($item2 !== false) {
-                    self::query("UPDATE $table SET `$column`='$pos2' WHERE `$primary`='{$item1['id']}' LIMIT 1");
-                    self::query("UPDATE $table SET `$column`='$pos1' WHERE `$primary`='{$item2['id']}' LIMIT 1");
+                    self::prepare("UPDATE $table SET `$column`=? WHERE `$primary`=? LIMIT 1", [$pos2, $item1[$primary]]);
+                    self::prepare("UPDATE $table SET `$column`=? WHERE `$primary`=? LIMIT 1", [$pos1, $item2[$primary]]);
                 }
                 break;
         }
@@ -327,7 +324,7 @@ class PDO_DB
         $arr = $result->fetchAll();
 
         for ($i=0; $i < count($arr); $i++) {
-            self::query("UPDATE `$table` SET `$column`='".(++$c)."' WHERE id='{$arr[$i]['id']}' LIMIT 1");
+            self::prepare("UPDATE `$table` SET `$column`=? WHERE id=? LIMIT 1", [++$c, $arr[$i]['id']]);
         }
     }
 }
