@@ -61,6 +61,8 @@ class PDO_DB
      * @param array $data - associated array of data, key name should be as field name in the DB table.
      * @param string $table - name of the table, where data should be inserted.
      * @param boolean $ignore - use INSERT or INSERT IGNORE statement. OPTIONAL
+     *
+     * @return integer Last insert ID
      */
     public static function insert(array $data, $table, $ignore = false)
     {
@@ -73,6 +75,8 @@ class PDO_DB
             }
             return self::lastInsertID();
         }
+
+        return 0;
     }
     
     /**
