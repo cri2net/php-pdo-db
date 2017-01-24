@@ -2,6 +2,8 @@
 
 namespace cri2net\php_pdo_db;
 
+use \Exception;
+use \PDO;
 use cri2net\php_singleton\Singleton;
 
 class PDO_DB
@@ -37,16 +39,21 @@ class PDO_DB
                 $defaults = array_merge($defaults, self::$params);
             }
 
-            self::$pdo = new \PDO(
-                "{$defaults['type']}:host={$defaults['host']};dbname={$defaults['name']};charset={$defaults['charset']}",
-                $defaults['user'],
-                $defaults['password'],
-                [
-                    \PDO::ATTR_ERRMODE            => \PDO::ERRMODE_EXCEPTION,
-                    \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-                    \PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES {$defaults['charset']}"
-                ]
-            );
+            try {
+                
+                self::$pdo = new PDO(
+                    "{$defaults['type']}:host={$defaults['host']};dbname={$defaults['name']};charset={$defaults['charset']}",
+                    $defaults['user'],
+                    $defaults['password'],
+                    [
+                        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES {$defaults['charset']}"
+                    ]
+                );
+            } catch (Exception $e) {
+                throw new Exception($e->getMessage(), $e->getCode());
+            }
         }
     }
 
