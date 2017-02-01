@@ -284,11 +284,13 @@ class PDO_DB
         switch ($dir) {
             case 'dup':
                 self::prepare("UPDATE `$table` SET `$column`=0 WHERE `$primary`=?", [$id]);
+                self::rebuild_pos($table, $where, "`$column` ASC");
                 break;
 
             case 'ddown':
                 $pos = self::max_pos("$table", $where) + 1;
                 self::prepare("UPDATE `$table` SET `$column`='$pos' WHERE `$primary`=?", [$id]);
+                self::rebuild_pos($table, $where, "`$column` ASC");
                 break;
 
             case 'up':
