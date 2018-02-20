@@ -40,9 +40,14 @@ class PDO_DB
             }
 
             try {
-                
+    
+                $dsn = "{$defaults['type']}:host={$defaults['host']};dbname={$defaults['name']}";
+                if ($defaults['type'] === 'mysql') {
+                    $dsn .= ";charset={$defaults['charset']}";
+                }
+    
                 self::$pdo = new PDO(
-                    "{$defaults['type']}:host={$defaults['host']};dbname={$defaults['name']};charset={$defaults['charset']}",
+                    $dsn,
                     $defaults['user'],
                     $defaults['password'],
                     [
