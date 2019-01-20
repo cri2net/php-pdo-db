@@ -86,7 +86,6 @@ class PDO_DB
         switch (self::getParams('type')) {
             case 'pgsql':
                 return '"';
-                break;
             
             case 'mysql':
             default:
@@ -104,15 +103,32 @@ class PDO_DB
      */
     public static function insert(array $data, $table, $ignore = false)
     {
+        $pdo = self::getPDO();
         $e_char = self::getEscapeCharacter();
 
         if (!empty($data)) {
-            $str = self::arrayToString($data);
-            if ($ignore) {
-                self::query("INSERT IGNORE INTO {$e_char}$table{$e_char} SET $str");
-            } else {
-                self::query("INSERT INTO {$e_char}$table{$e_char} SET $str");
+
+            $keys = [];
+            $str_values = '';
+
+            foreach ($data as $key => $value) {
+
+                $keys[] = $e_char . $key . $e_char;
+
+                if ($value === null) {
+                    $str_values .= "NULL, ";
+                } else {
+                    $value = $pdo->quote($value);
+                    $str_values .= "$value, ";
+                }
             }
+
+            $str_values = trim($str_values, ', ');
+            $str_keys = implode(', ', $keys);
+
+            $ignore_keyword = ($ignore && (self::getParams('type') === 'mysql')) ? 'IGNORE' : '';
+            self::query("INSERT $ignore_keyword INTO {$e_char}$table{$e_char} ($str_keys) VALUES ($str_values)");
+            
             return self::lastInsertID();
         }
 
@@ -132,7 +148,16 @@ class PDO_DB
 
         if (!empty($data)) {
             $str = self::arrayToString($data);
-            $stm = self::prepare("UPDATE {$e_char}$table{$e_char} SET $str WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$id]);
+
+            switch (self::getParams('type')) {
+                case 'pgsql':
+                    $stm = self::prepare("UPDATE {$e_char}$table{$e_char} SET $str WHERE {$e_char}$primary{$e_char}=?", [$id]);
+                    break;
+                
+                case 'mysql':
+                default:
+                    $stm = self::prepare("UPDATE {$e_char}$table{$e_char} SET $str WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$id]);
+            }
 
             return $stm->rowCount();
         }
@@ -161,8 +186,12 @@ class PDO_DB
      */
     public static function lastInsertID()
     {
-        $pdo = self::getPDO();
-        return $pdo->lastInsertId();
+        try {
+            $pdo = self::getPDO();
+            return $pdo->lastInsertId();
+        } catch (Exception $e) {
+            return 0;
+        }
     }
     
     /**
@@ -272,8 +301,12 @@ class PDO_DB
         $e_char = self::getEscapeCharacter();
 
         $query = $is_virtual
-            ? "UPDATE $table SET {$e_char}$del_column{$e_char}=1 WHERE {$e_char}$primary{$e_char}=? LIMIT 1"
-            : "DELETE FROM $table WHERE {$e_char}$primary{$e_char}=? LIMIT 1";
+            ? "UPDATE $table SET {$e_char}$del_column{$e_char}=1 WHERE {$e_char}$primary{$e_char}=?"
+            : "DELETE FROM $table WHERE {$e_char}$primary{$e_char}=?";
+
+        if (self::getParams('type') === 'mysql') {
+            $query .= ' LIMIT 1';
+        }
         
         $stm = self::prepare($query, [$id]);
         return $stm->rowCount();
@@ -282,13 +315,18 @@ class PDO_DB
     public static function rebuild_pos($table, $where = null, $order = null, $column = 'pos')
     {
         $e_char = self::getEscapeCharacter();
-        $qOrder = ($order == null) ? "{$e_char}$column{$e_char} ASC, id ASC" : $order;
+        $qOrder = ($order == null) ? "{$e_char}$column{$e_char}, id" : $order;
         $qWhere = ($where == null) ? '' : "WHERE $where";
 
         $stm = self::query("SELECT * FROM {$e_char}$table{$e_char} $qWhere ORDER BY $qOrder");
         $arr = $stm->fetchAll();
 
-        $stm = self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}id{$e_char}=? LIMIT 1");
+        $query = "UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}id{$e_char}=?";
+        if (self::getParams('type') === 'mysql') {
+            $query .= ' LIMIT 1';
+        }
+
+        $stm = self::prepare($query);
         for ($i=0; $i < count($arr); $i++) {
             $stm->execute(array($i+1, $arr[$i]['id']));
         }
@@ -319,7 +357,7 @@ class PDO_DB
             self::query("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char} = {$e_char}$column{$e_char} - 1 WHERE $qW {$e_char}$column{$e_char} > $posFrom AND {$e_char}$column{$e_char} <= $posTo");
         }
             
-        self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=$posTo WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$id]);
+        self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=$posTo WHERE {$e_char}$primary{$e_char}=?", [$id]);
         return true;
     }
 
@@ -332,13 +370,13 @@ class PDO_DB
         switch ($dir) {
             case 'dup':
                 self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=0 WHERE {$e_char}$primary{$e_char}=?", [$id]);
-                self::rebuild_pos($table, $where, "{$e_char}$column{$e_char} ASC");
+                self::rebuild_pos($table, $where, "{$e_char}$column{$e_char}");
                 break;
 
             case 'ddown':
                 $pos = self::max_pos($table, $where) + 1;
                 self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}='$pos' WHERE {$e_char}$primary{$e_char}=?", [$id]);
-                self::rebuild_pos($table, $where, "{$e_char}$column{$e_char} ASC");
+                self::rebuild_pos($table, $where, "{$e_char}$column{$e_char}");
                 break;
 
             case 'up':
@@ -350,8 +388,8 @@ class PDO_DB
                 $item2 = $stm->fetch();
                 
                 if ($item2 !== false) {
-                    self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$pos2, $item1[$primary]]);
-                    self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$pos1, $item2[$primary]]);
+                    self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}$primary{$e_char}=?", [$pos2, $item1[$primary]]);
+                    self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}$primary{$e_char}=?", [$pos1, $item2[$primary]]);
                 }
                 break;
             
@@ -365,8 +403,8 @@ class PDO_DB
                 $item2 = $stm->fetch();
                 
                 if ($item2 !== false) {
-                    self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$pos2, $item1[$primary]]);
-                    self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$pos1, $item2[$primary]]);
+                    self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}$primary{$e_char}=?", [$pos2, $item1[$primary]]);
+                    self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE {$e_char}$primary{$e_char}=?", [$pos1, $item2[$primary]]);
                 }
                 break;
         }
@@ -381,14 +419,14 @@ class PDO_DB
         return (int)$result->fetchColumn();
     }
     
-    public static function reset_pos($table, $order = 'id ASC', $column = 'pos')
+    public static function reset_pos($table, $order = 'id', $column = 'pos')
     {
         $e_char = self::getEscapeCharacter();
         $result = self::query("SELECT * FROM {$e_char}$table{$e_char} ORDER BY $order");
         $arr = $result->fetchAll();
 
         for ($i=0; $i < count($arr); $i++) {
-            self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE id=? LIMIT 1", [++$c, $arr[$i]['id']]);
+            self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE id=?", [++$c, $arr[$i]['id']]);
         }
     }
 }
