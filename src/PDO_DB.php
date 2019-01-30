@@ -39,6 +39,8 @@ class PDO_DB
                 $defaults = array_merge($defaults, self::$params);
             }
 
+            self::initSettings($defaults);
+
             try {
     
                 $dsn = "{$defaults['type']}:host={$defaults['host']};dbname={$defaults['name']}";
