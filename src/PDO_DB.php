@@ -18,6 +18,11 @@ class PDO_DB
         $this->init();
     }
 
+    /**
+     * Setter for self::$params
+     * @param  array  $params Options for create \PDO object
+     * @return void
+     */
     public static function initSettings(array $params)
     {
         self::$params = $params;
@@ -30,9 +35,9 @@ class PDO_DB
             $defaults = [
                 'type'     => 'mysql',
                 'charset'  => 'utf8',
-                'host'     => ((defined('DB_HOST')) ? DB_HOST : 'localhost'),
-                'user'     => ((defined('DB_USER')) ? DB_USER : 'root'),
-                'name'     => ((defined('DB_NAME')) ? DB_NAME : ''),
+                'host'     => ((defined('DB_HOST'))     ? DB_HOST     : 'localhost'),
+                'user'     => ((defined('DB_USER'))     ? DB_USER     : 'root'),
+                'name'     => ((defined('DB_NAME'))     ? DB_NAME     : ''),
                 'password' => ((defined('DB_PASSWORD')) ? DB_PASSWORD : ''),
             ];
             if (self::$params !== null) {
@@ -43,7 +48,18 @@ class PDO_DB
 
             try {
     
-                $dsn = "{$defaults['type']}:host={$defaults['host']};dbname={$defaults['name']}";
+                $dsn = "{$defaults['type']}:dbname={$defaults['name']}";
+
+                if (isset($defaults['unix_socket'])) {
+                    $dsn .= ";unix_socket={$defaults['unix_socket']}";
+                } else {
+                    $dsn .= ";host={$defaults['host']}";
+
+                    if (isset($defaults['port'])) {
+                        $dsn .= ";port={$defaults['port']}";
+                    }
+                }
+                
                 if ($defaults['type'] === 'mysql') {
                     $dsn .= ";charset={$defaults['charset']}";
                 }
@@ -64,12 +80,21 @@ class PDO_DB
         }
     }
 
+    /**
+     * Getter for \PDO object
+     * @return \PDO
+     */
     public static function getPDO()
     {
         $instance = self::getInstance();
         return $instance::$pdo;
     }
 
+    /**
+     * Getter for self::$params
+     * @param  string $key Param key. If null, all params as array will be returned. OPTIONAL
+     * @return mixed
+     */
     public static function getParams($key = null)
     {
         if ($key === null) {
@@ -83,6 +108,10 @@ class PDO_DB
         return null;
     }
 
+    /**
+     * Return character for escaping columns and table names in SQL query
+     * @return string
+     */
     public static function getEscapeCharacter()
     {
         switch (self::getParams('type')) {
@@ -222,7 +251,7 @@ class PDO_DB
     }
 
     /**
-     *  Почти что псевдоним table_list
+     *  As table_list
      */
     public static function first()
     {
@@ -247,6 +276,15 @@ class PDO_DB
         return $result[0];
     }
 
+    /**
+     * Select from table
+     * @param  string $table Table name
+     * @param  string $where SQL WHERE clause (without WHERE word). OPTIONAL
+     * @param  string $order SQL ORDER BY clause (without ORDER BY word). OPTIONAL
+     * @param  string $limit SQL LIMIT clause (without LIMIT/OFFSET words). OPTIONAL
+     * 
+     * @return array of rows from table
+     */
     public static function table_list($table, $where = null, $order = null, $limit = null)
     {
         $e_char = self::getEscapeCharacter();
@@ -258,14 +296,29 @@ class PDO_DB
         if ($order != null) {
             $query .= " ORDER BY $order";
         }
+
         if ($limit != null) {
-            $query .= " LIMIT $limit";
+
+            if (strpos($limit, ",") !== false) {
+
+                list($limit, $offset) = explode(",", $limit);
+                $query .= " LIMIT $limit OFFSET $offset";
+            } else {
+                $query .= " LIMIT $limit";
+            }
         }
 
         $stm = self::query($query);
         return $stm->fetchAll();
     }
     
+    /**
+     * Get record by primary key
+     * @param  string $table   Table name
+     * @param  string $id      Primary key
+     * @param  string $primary Primary key column name. OPTIONAL
+     * @return array|null      row from table
+     */
     public static function row_by_id($table, $id, $primary = 'id')
     {
         $e_char = self::getEscapeCharacter();
@@ -279,7 +332,42 @@ class PDO_DB
 
         return $record;
     }
+
+    /**
+     * Increment column
+     * @param  string $table   Table name
+     * @param  string $column  Column name
+     * @param  string $id      Primary key
+     * @param  string $primary Primary key column name. OPTIONAL
+     * @return void
+     */
+    public static function increment($table, $column, $id, $primary = 'id')
+    {
+        $e = self::getEscapeCharacter();
+        self::prepare("UPDATE {$e}$table{$e} SET {$e}$column{$e} = {$e}$column{$e} + 1 WHERE {$e}$primary{$e}=?", [$id]);
+    }
+
+    /**
+     * Decrement column
+     * @param  string $table   Table name
+     * @param  string $column  Column name
+     * @param  string $id      Primary key
+     * @param  string $primary Primary key column name. OPTIONAL
+     * @return void
+     */
+    public static function decrement($table, $column, $id, $primary = 'id')
+    {
+        $e = self::getEscapeCharacter();
+        self::prepare("UPDATE {$e}$table{$e} SET {$e}$column{$e} = {$e}$column{$e} - 1 WHERE {$e}$primary{$e}=?", [$id]);
+    }
     
+    /**
+     * run PDO::prepare & PDOStatement::execute
+     * @param  strign $query            SQL query
+     * @param  array  $input_parameters An array of values with as many elements as there are
+     *                                  bound parameters in the SQL statement being executed. OPTIONAL
+     * @return \PDOStatement
+     */
     public static function prepare($query, array $input_parameters = [])
     {
         $pdo = self::getPDO();
@@ -292,6 +380,11 @@ class PDO_DB
         return $stm;
     }
 
+    /**
+     * run PDO::query
+     * @param  strign $query SQL query
+     * @return \PDOStatement
+     */
     public static function query($query)
     {
         $pdo = self::getPDO();
