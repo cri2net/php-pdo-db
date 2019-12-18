@@ -301,7 +301,7 @@ class PDO_DB
 
             if (strpos($limit, ",") !== false) {
 
-                list($limit, $offset) = explode(",", $limit);
+                list($offset, $limit) = explode(",", $limit);
                 $query .= " LIMIT $limit OFFSET $offset";
             } else {
                 $query .= " LIMIT $limit";
