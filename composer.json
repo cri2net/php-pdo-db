@@ -19,5 +19,5 @@
             "cri2net\\php_pdo_db\\": "src"
         }
     },
-    "license": "proprietary"
+    "license": "MIT"
 }
