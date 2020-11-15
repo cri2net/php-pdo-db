@@ -2,8 +2,8 @@
 
 namespace cri2net\php_pdo_db;
 
-use \Exception;
-use \PDO;
+use Exception;
+use PDO;
 use cri2net\php_singleton\Singleton;
 
 class PDO_DB
@@ -81,8 +81,8 @@ class PDO_DB
     }
 
     /**
-     * Getter for \PDO object
-     * @return \PDO
+     * Getter for PDO object
+     * @return PDO
      */
     public static function getPDO()
     {
@@ -92,7 +92,7 @@ class PDO_DB
 
     /**
      * Getter for self::$params
-     * @param  string $key Param key. If null, all params as array will be returned. OPTIONAL
+     * @param  string|null $key Param key. If null, all params as array will be returned. OPTIONAL
      * @return mixed
      */
     public static function getParams($key = null)
@@ -172,26 +172,30 @@ class PDO_DB
      * @param string $table - name of the table, where record should be updated.
      * @param string $primary - name of the column for where clause.
      * @param string $id - value of the primary for where clause.
+     *
+     * @return integer row count
      */
     public static function update(array $data, $table, $id, $primary = 'id')
     {
         $e_char = self::getEscapeCharacter();
 
-        if (!empty($data)) {
-            $str = self::arrayToString($data);
-
-            switch (self::getParams('type')) {
-                case 'pgsql':
-                    $stm = self::prepare("UPDATE {$e_char}$table{$e_char} SET $str WHERE {$e_char}$primary{$e_char}=?", [$id]);
-                    break;
-                
-                case 'mysql':
-                default:
-                    $stm = self::prepare("UPDATE {$e_char}$table{$e_char} SET $str WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$id]);
-            }
-
-            return $stm->rowCount();
+        if (empty($data)) {
+            return 0;
         }
+
+        $str = self::arrayToString($data);
+
+        switch (self::getParams('type')) {
+            case 'pgsql':
+                $stm = self::prepare("UPDATE {$e_char}$table{$e_char} SET $str WHERE {$e_char}$primary{$e_char}=?", [$id]);
+                break;
+
+            case 'mysql':
+            default:
+                $stm = self::prepare("UPDATE {$e_char}$table{$e_char} SET $str WHERE {$e_char}$primary{$e_char}=? LIMIT 1", [$id]);
+        }
+
+        return $stm->rowCount();
     }
     
     /**
@@ -199,17 +203,20 @@ class PDO_DB
      * @param array $data - associated array of data, key name should be as field name in the DB table.
      * @param string $table - name of the table, where records should be updated.
      * @param string $where - SQL where clause.
+     * @return integer row count
      */
     public static function updateWithWhere(array $data, $table, $where)
     {
         $e_char = self::getEscapeCharacter();
 
-        if (!empty($data)) {
-            $str = self::arrayToString($data);
-            $stm = self::query("UPDATE {$e_char}$table{$e_char} SET $str WHERE $where");
-
-            return $stm->rowCount();
+        if (empty($data)) {
+            return 0;
         }
+
+        $str = self::arrayToString($data);
+        $stm = self::query("UPDATE {$e_char}$table{$e_char} SET $str WHERE $where");
+
+        return $stm->rowCount();
     }
     
     /**
@@ -363,7 +370,7 @@ class PDO_DB
     
     /**
      * run PDO::prepare & PDOStatement::execute
-     * @param  strign $query            SQL query
+     * @param  string $query            SQL query
      * @param  array  $input_parameters An array of values with as many elements as there are
      *                                  bound parameters in the SQL statement being executed. OPTIONAL
      * @return \PDOStatement
@@ -382,7 +389,7 @@ class PDO_DB
 
     /**
      * run PDO::query
-     * @param  strign $query SQL query
+     * @param  string $query SQL query
      * @return \PDOStatement
      */
     public static function query($query)
@@ -521,7 +528,7 @@ class PDO_DB
         $arr = $result->fetchAll();
 
         for ($i=0; $i < count($arr); $i++) {
-            self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE id=?", [++$c, $arr[$i]['id']]);
+            self::prepare("UPDATE {$e_char}$table{$e_char} SET {$e_char}$column{$e_char}=? WHERE id=?", [$i + 1, $arr[$i]['id']]);
         }
     }
 }
